@@ -118,7 +118,7 @@
 
         window.closeModal = () => document.getElementById('history-modal').style.display = 'none';
 
-        onValue(ref(db, 'kids'), (snapshot) => {
+       onValue(ref(db, 'kids'), (snapshot) => {
             const kids = snapshot.val();
             const list = document.getElementById('kids-list');
             const capDisplay = document.getElementById('total-market-cap');
@@ -140,9 +140,8 @@
                 card.innerHTML = `
                     <div class="p-4 flex justify-between items-center">
                         <div>
-                            <p class="text-[10px] text-gray-500 font-mono tracking-widest">${kid.symbol}</p>
-                            <h2 class="text-xl font-bold">${kid.name}</h2>
-                        </div>
+                            <h2 class="text-2xl font-black text-white tracking-tighter">${kid.symbol}</h2>
+                            </div>
                         <div class="text-right">
                             <p class="text-2xl font-mono ${kid.balance >= 0 ? 'text-green-400' : 'text-red-400'}">$${(kid.balance/100).toFixed(2)}</p>
                         </div>
@@ -154,8 +153,8 @@
                     </div>
                     <div id="chart-${id}" class="chart-container"></div>
                     <div class="p-4 flex justify-between items-center bg-[#1c2128]">
-                        <button onclick="showHistory('${id}', '${kid.name}')" class="text-blue-400 text-[10px] font-bold uppercase underline">History</button>
-                        <button onclick="trade('${id}', ${kid.balance})" class="bg-white text-black text-[10px] font-black px-4 py-2 rounded-full uppercase shadow-lg">Execute Trade</button>
+                        <button onclick="showHistory('${id}', '${kid.symbol}')" class="text-blue-400 text-[10px] font-bold uppercase underline">History</button>
+                        <button onclick="trade('${id}', ${kid.balance})" class="bg-white text-black text-[10px] font-black px-4 py-2 rounded-full uppercase shadow-lg font-sans">Execute Trade</button>
                     </div>
                 `;
                 list.appendChild(card);
