@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KidStock Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        body { background-color: #0d1117; color: white; font-family: sans-serif; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; margin-bottom: 24px; }
+        .chart-container { height: 250px; width: 100%; }
+        .tv-lightweight-charts-logo { display: none !important; }
+        #history-modal { 
+            display: none; position: fixed; inset: 0; 
+            background: rgba(0,0,0,0.7); z-index: 50; 
+            align-items: center; justify-content: center; padding: 20px;
+        }
+        .modal-content { 
+            background: #1c2128; border: 1px solid #30363d; border-radius: 16px; 
+            width: 100%; max-width: 400px; max-height: 70vh; display: flex; flex-direction: column;
+        }
+    </style>
+</head>
+<body class="p-4 max-w-md mx-auto pb-10">
+
+    <header class="flex justify-between items-center mb-2">
+        <h1 class="text-2xl font-bold text-green-500 tracking-tight">KidStock $</h1>
+        <button onclick="addKid()" class="bg-blue-600 px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-500 transition">Add Kid</button>
+    </header>
+
+    <div class="mb-6 p-4 bg-[#1c2128] border border-gray-800 rounded-xl shadow-lg">
+        <p class="text-[10px] text-gray-500 uppercase font-black tracking-widest">Total Market Cap (Family Portfolio)</p>
+        <p id="total-market-cap" class="text-3xl font-mono font-bold text-white">$0.00</p>
+    </div>
+
+    <div id="kids-list"></div>
+
+    <div id="history-modal" onclick="closeModal()">
+        <div class="modal-content p-4 shadow-2xl" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-4 border-b border-gray-800 pb-2">
+                <h2 id="modal-title" class="text-lg font-bold text-white">History</h2>
+                <button onclick="closeModal()" class="text-gray-400 text-2xl">&times;</button>
+            </div>
+            <div id="modal-body" class="space-y-3 overflow-y-auto pr-2"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, set, push, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // --- PASTE YOUR FIREBASE CONFIG HERE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCt3RsSGufHYFAJyFnh57yU_lMoaDXivbg",
+			authDomain: "kidstock-hapieprasad.firebaseapp.com",
+			databaseURL: "https://kidstock-hapieprasad-default-rtdb.firebaseio.com",
+			projectId: "kidstock-hapieprasad",
+			storageBucket: "kidstock-hapieprasad.firebasestorage.app",
+			messagingSenderId: "974038869230",
+			appId: "1:974038869230:web:65c5b73640efb63e42ffff"
+        };
+		
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        let activeFilters = {}; 
+
+        window.addKid = function() {
+            const name = prompt("Kid Name:");
+            const symbol = prompt("Symbol (e.g. $MAX):");
+            if (name && symbol) {
+                const newKidRef = push(ref(db, 'kids'));
+                const now = Math.floor(Date.now() / 1000);
+                set(newKidRef, { name, symbol: symbol.toUpperCase(), balance: 0 });
+                push(ref(db, `transactions/${newKidRef.key}`), { value: 0, reason: "Account Opened", time: now });
+            }
+        };
+
+        window.trade = function(kidId, currentBalance) {
+            const amount = prompt("Amount (e.g. 2.00 or -1.00):");
+            if (amount === null) return;
+            const reason = prompt("Chore/Reason:");
+            if (!reason) return;
+            const change = parseFloat(amount);
+            const newBalance = Math.round(currentBalance + (change * 100));
+            update(ref(db, `kids/${kidId}`), { balance: newBalance });
+            push(ref(db, `transactions/${kidId}`), { 
+                value: newBalance / 100, reason, change, time: Math.floor(Date.now() / 1000) 
+            });
+        };
+
+        window.setFilter = function(kidId, days) {
+            activeFilters[kidId] = days;
+            renderDetails(kidId);
+        };
+
+        window.showHistory = function(kidId, kidName) {
+            onValue(ref(db, `transactions/${kidId}`), (snapshot) => {
+                const txs = snapshot.val();
+                if (!txs) return;
+                const data = Object.values(txs).sort((a,b) => b.time - a.time);
+                document.getElementById('modal-title').innerText = `${kidName} Ledger`;
+                const body = document.getElementById('modal-body');
+                body.innerHTML = data.map(t => `
+                    <div class="flex justify-between border-b border-gray-800 pb-2">
+                        <div>
+                            <p class="text-sm text-white font-medium">${t.reason}</p>
+                            <p class="text-[10px] text-gray-500">${new Date(t.time*1000).toLocaleString('en-US', {timeZone: 'America/New_York'})}</p>
+                        </div>
+                        <p class="${t.change >= 0 ? 'text-green-400' : 'text-red-400'} font-mono text-sm font-bold">
+                            ${t.change ? (t.change > 0 ? '+' : '') + t.change.toFixed(2) : '0.00'}
+                        </p>
+                    </div>
+                `).join('');
+                document.getElementById('history-modal').style.display = 'flex';
+            }, { onlyOnce: true });
+        };
+
+        window.closeModal = () => document.getElementById('history-modal').style.display = 'none';
+
+        onValue(ref(db, 'kids'), (snapshot) => {
+            const kids = snapshot.val();
+            const list = document.getElementById('kids-list');
+            const capDisplay = document.getElementById('total-market-cap');
+            list.innerHTML = '';
+            
+            if (!kids) {
+                capDisplay.innerText = "$0.00";
+                return;
+            }
+
+            let totalCents = 0;
+            Object.keys(kids).forEach(id => {
+                const kid = kids[id];
+                totalCents += (kid.balance || 0);
+                if (!activeFilters[id]) activeFilters[id] = 1;
+
+                const card = document.createElement('div');
+                card.className = 'card overflow-hidden shadow-2xl';
+                card.innerHTML = `
+                    <div class="p-4 flex justify-between items-center">
+                        <div>
+                            <p class="text-[10px] text-gray-500 font-mono tracking-widest">${kid.symbol}</p>
+                            <h2 class="text-xl font-bold">${kid.name}</h2>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-2xl font-mono ${kid.balance >= 0 ? 'text-green-400' : 'text-red-400'}">$${(kid.balance/100).toFixed(2)}</p>
+                        </div>
+                    </div>
+                    <div class="flex px-4 space-x-4 text-[11px] font-bold text-gray-500 border-b border-gray-800 pb-2">
+                        <button onclick="setFilter('${id}', 1)" class="${activeFilters[id]==1?'text-green-400':''}">1D</button>
+                        <button onclick="setFilter('${id}', 5)" class="${activeFilters[id]==5?'text-green-400':''}">5D</button>
+                        <button onclick="setFilter('${id}', 30)" class="${activeFilters[id]==30?'text-green-400':''}">1M</button>
+                    </div>
+                    <div id="chart-${id}" class="chart-container"></div>
+                    <div class="p-4 flex justify-between items-center bg-[#1c2128]">
+                        <button onclick="showHistory('${id}', '${kid.name}')" class="text-blue-400 text-[10px] font-bold uppercase underline">History</button>
+                        <button onclick="trade('${id}', ${kid.balance})" class="bg-white text-black text-[10px] font-black px-4 py-2 rounded-full uppercase shadow-lg">Execute Trade</button>
+                    </div>
+                `;
+                list.appendChild(card);
+                renderDetails(id);
+            });
+            capDisplay.innerText = `$${(totalCents / 100).toFixed(2)}`;
+        });
+
+        function renderDetails(kidId) {
+            onValue(ref(db, `transactions/${kidId}`), (snapshot) => {
+                const txs = snapshot.val();
+                if (!txs) return;
+                const fullArray = Object.values(txs).sort((a,b) => a.time - b.time);
+                
+                const now = Math.floor(Date.now() / 1000);
+                const cutoff = now - (activeFilters[kidId] * 86400);
+                const displayData = fullArray.filter(t => t.time >= cutoff);
+
+                const container = document.getElementById(`chart-${kidId}`);
+                if (!container) return;
+                container.innerHTML = '';
+                
+                const chart = LightweightCharts.createChart(container, {
+                    layout: { background: { color: 'transparent' }, textColor: '#8b949e' },
+                    grid: { vertLines: { visible: false }, horzLines: { color: '#21262d' } },
+                    timeScale: { 
+                        borderVisible: false, 
+                        timeVisible: true,
+                    },
+                    localization: {
+                        timeFormatter: (ts) => new Date(ts * 1000).toLocaleTimeString('en-US', {timeZone:'America/New_York', hour:'2-digit', minute:'2-digit', hour12:true}),
+                    },
+                    rightPriceScale: { borderVisible: false },
+                    handleScroll: false, handleScale: false
+                });
+
+                const baseline = chart.addBaselineSeries({
+                    baseValue: { type: 'price', price: 0 },
+                    topLineColor: '#22c55e', topFillColor1: 'rgba(34, 197, 94, 0.4)', topFillColor2: 'rgba(34, 197, 94, 0)',
+                    bottomLineColor: '#ef4444', bottomFillColor1: 'rgba(239, 68, 68, 0)', bottomFillColor2: 'rgba(239, 68, 68, 0.4)',
+                    lineWidth: 2, priceLineVisible: true, priceLineStyle: 2,
+                });
+
+                // Force start-of-range point so 1D/5D looks correct
+                const points = displayData.length > 1 ? displayData : [
+                    { time: cutoff, value: displayData.length > 0 ? displayData[0].value : 0 }, 
+                    ...displayData
+                ];
+                
+                baseline.setData(points.map(t => ({ time: t.time, value: t.value })));
+                chart.timeScale().fitContent();
+            }, { onlyOnce: true });
+        }
+    </script>
+</body>
+</html>
