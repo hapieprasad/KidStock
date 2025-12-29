@@ -163,7 +163,7 @@
             capDisplay.innerText = `$${(totalCents / 100).toFixed(2)}`;
         });
 
-        function renderDetails(kidId) {
+       function renderDetails(kidId) {
             onValue(ref(db, `transactions/${kidId}`), (snapshot) => {
                 const txs = snapshot.val();
                 if (!txs) return;
@@ -185,7 +185,12 @@
                         timeVisible: true,
                     },
                     localization: {
-                        timeFormatter: (ts) => new Date(ts * 1000).toLocaleTimeString('en-US', {timeZone:'America/New_York', hour:'2-digit', minute:'2-digit', hour12:true}),
+                        // REMOVED 'America/New_York' TO ALLOW AUTOMATIC LOCAL TIME
+                        timeFormatter: (ts) => new Date(ts * 1000).toLocaleTimeString('en-US', {
+                            hour: '2-digit', 
+                            minute: '2-digit', 
+                            hour12: true
+                        }),
                     },
                     rightPriceScale: { borderVisible: false },
                     handleScroll: false, handleScale: false
@@ -198,7 +203,6 @@
                     lineWidth: 2, priceLineVisible: true, priceLineStyle: 2,
                 });
 
-                // Force start-of-range point so 1D/5D looks correct
                 const points = displayData.length > 1 ? displayData : [
                     { time: cutoff, value: displayData.length > 0 ? displayData[0].value : 0 }, 
                     ...displayData
